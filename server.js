@@ -19,12 +19,6 @@ import Groq from "groq-sdk";
 import { ChromaClient } from "chromadb";
 
 /**
- * 👉 IMPORT OBLIGATORIO
- * Chroma en Node NO trae embeddings por defecto
- */
-import { DefaultEmbeddingFunction } from "@chroma-core/default-embed";
-
-/**
  * ============================
  * CONFIG APP
  * ============================
@@ -37,14 +31,8 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 /**
- * 👉 URL DEL CHROMA REMOTO (Render)
- * ⚠️ NUNCA localhost en producción
- */
-const CHROMA_URL = "https://chroma-4urg.onrender.com";
-
-/**
  * ============================
- * GROQ
+ * GROQ (LLM)
  * ============================
  */
 const groq = new Groq({
@@ -53,27 +41,22 @@ const groq = new Groq({
 
 /**
  * ============================
- * CHROMA
+ * CHROMA CLIENT
  * ============================
- */
-
-/**
- * 👉 Embedding explícito (FIX CRÍTICO)
- */
-const embeddingFunction = new DefaultEmbeddingFunction();
-
-/**
- * 👉 Cliente apuntando al Chroma remoto
+ * 👉 Configuración correcta para Chroma SERVER remoto
+ * 👉 NO usamos DefaultEmbeddingFunction
  */
 const chroma = new ChromaClient({
-  path: CHROMA_URL,
+  host: "chroma-4urg.onrender.com",
+  port: 443,
+  ssl: true,
 });
 
 let collection;
 
 /**
  * ============================
- * HEALTH
+ * HEALTH CHECK
  * ============================
  */
 app.get("/health", (_, res) => {
@@ -132,6 +115,7 @@ app.post("/ask", askRateLimiter, async (req, res) => {
   try {
     /**
      * 1️⃣ QUERY A CHROMA
+     * 👉 Chroma SOLO busca (embeddings ya cargados)
      */
     const result = await collection.query({
       queryTexts: [question],
@@ -151,7 +135,7 @@ app.post("/ask", askRateLimiter, async (req, res) => {
     const context = documents.join("\n\n");
 
     /**
-     * 2️⃣ GROQ
+     * 2️⃣ GROQ (LLM)
      */
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -160,7 +144,7 @@ app.post("/ask", askRateLimiter, async (req, res) => {
         {
           role: "system",
           content:
-            "Sos un asistente jurídico argentino. Respondés de manera técnica y fundada en el Código Civil y Comercial.",
+            "Sos un asistente jurídico argentino. Respondés de manera técnica, clara y fundada en el Código Civil y Comercial.",
         },
         {
           role: "user",
@@ -195,12 +179,13 @@ app.post("/ask", askRateLimiter, async (req, res) => {
  */
 async function startServer() {
   /**
-   * 👉 Crear / obtener colección
-   * 👉 Embedding explícito (FIX DEFINITIVO)
+   * 👉 IMPORTANTE:
+   * embeddingFunction: null
+   * evita DefaultEmbeddingFunction y errores en Render
    */
   collection = await chroma.getOrCreateCollection({
     name: "jurisprudencia",
-    embeddingFunction,
+    embeddingFunction: null,
   });
 
   console.log("✅ Colección 'jurisprudencia' lista");

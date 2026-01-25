@@ -1,0 +1,37 @@
+{"timestamp":"2026-01-24T18:09:30.631Z","ip":"::1","questionLength":62,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:11:09.949Z","ip":"::1","questionLength":62,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:11:16.664Z","ip":"::1","questionLength":62,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:11:20.805Z","ip":"::1","questionLength":62,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:12:10.666Z","ip":"::1","questionLength":62,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:12:30.420Z","ip":"::1","questionLength":0,"status":"invalid","error":"La pregunta es obligatoria."}
+{"timestamp":"2026-01-24T18:12:58.413Z","ip":"::1","questionLength":600,"status":"invalid","error":"La pregunta es demasiado extensa."}
+{"timestamp":"2026-01-24T18:13:17.794Z","ip":"::1","questionLength":38,"status":"invalid","error":"La consulta contiene instrucciones no permitidas."}
+{"timestamp":"2026-01-24T18:13:43.400Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:44.612Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:45.558Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:46.714Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:48.220Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:49.449Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:50.493Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:51.396Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:52.250Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:53.309Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:13:56.476Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:14:10.648Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:14:11.620Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:14:17.111Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:14:23.784Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:14:31.315Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:14:38.382Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:14:59.897Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:15:01.042Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:15:02.224Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:15:06.507Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:15:12.461Z","ip":"::1","questionLength":20,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:32:58.142Z","ip":"::1","questionLength":62,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:35:32.097Z","ip":"::1","questionLength":18,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:36:01.721Z","ip":"::1","questionLength":34,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:36:35.451Z","ip":"::1","questionLength":51,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:40:09.750Z","ip":"::1","questionLength":59,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:44:08.638Z","ip":"::1","questionLength":44,"status":"ok","error":null}
+{"timestamp":"2026-01-24T18:44:22.801Z","ip":"::1","questionLength":25,"status":"ok","error":null}

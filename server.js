@@ -19,6 +19,12 @@ import Groq from "groq-sdk";
 import { ChromaClient } from "chromadb";
 
 /**
+ * 👉 IMPORT OBLIGATORIO
+ * Chroma en Node NO trae embeddings por defecto
+ */
+import { DefaultEmbeddingFunction } from "@chroma-core/default-embed";
+
+/**
  * ============================
  * CONFIG APP
  * ============================
@@ -29,6 +35,11 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+
+/**
+ * 👉 URL DEL CHROMA REMOTO (Render)
+ * ⚠️ NUNCA localhost en producción
+ */
 const CHROMA_URL = "https://chroma-4urg.onrender.com";
 
 /**
@@ -44,6 +55,15 @@ const groq = new Groq({
  * ============================
  * CHROMA
  * ============================
+ */
+
+/**
+ * 👉 Embedding explícito (FIX CRÍTICO)
+ */
+const embeddingFunction = new DefaultEmbeddingFunction();
+
+/**
+ * 👉 Cliente apuntando al Chroma remoto
  */
 const chroma = new ChromaClient({
   path: CHROMA_URL,
@@ -174,9 +194,13 @@ app.post("/ask", askRateLimiter, async (req, res) => {
  * ============================
  */
 async function startServer() {
-  // Crear / obtener colección
+  /**
+   * 👉 Crear / obtener colección
+   * 👉 Embedding explícito (FIX DEFINITIVO)
+   */
   collection = await chroma.getOrCreateCollection({
     name: "jurisprudencia",
+    embeddingFunction,
   });
 
   console.log("✅ Colección 'jurisprudencia' lista");

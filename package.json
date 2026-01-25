@@ -7,6 +7,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@chroma-core/default-embed": "^0.1.9",
     "axios": "^1.13.2",
     "chromadb": "^3.2.2",
     "cors": "^2.8.6",

@@ -15,12 +15,12 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import rateLimit from "express-rate-limit";
-import axios from "axios";
 import Groq from "groq-sdk";
+import { ChromaClient } from "chromadb";
 
 /**
  * ============================
- * CONFIG
+ * CONFIG APP
  * ============================
  */
 const app = express();
@@ -39,6 +39,17 @@ const CHROMA_URL = "https://chroma-4urg.onrender.com";
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
+
+/**
+ * ============================
+ * CHROMA
+ * ============================
+ */
+const chroma = new ChromaClient({
+  path: CHROMA_URL,
+});
+
+let collection;
 
 /**
  * ============================
@@ -65,15 +76,9 @@ const askRateLimiter = rateLimit({
  * ============================
  */
 function validateQuestion(question) {
-  if (!question || typeof question !== "string") {
-    return "Pregunta inválida";
-  }
-  if (question.trim().length === 0) {
-    return "Pregunta vacía";
-  }
-  if (question.length > 500) {
-    return "Pregunta demasiado larga";
-  }
+  if (!question || typeof question !== "string") return "Pregunta inválida";
+  if (question.trim().length === 0) return "Pregunta vacía";
+  if (question.length > 500) return "Pregunta demasiado larga";
   return null;
 }
 
@@ -83,6 +88,7 @@ function validateQuestion(question) {
  * ============================
  */
 function logQuery(data) {
+  fs.mkdirSync("./logs", { recursive: true });
   fs.appendFile(
     "./logs/queries.log",
     JSON.stringify({ ...data, ts: new Date().toISOString() }) + "\n",
@@ -105,18 +111,15 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
   try {
     /**
-     * 1️⃣ QUERY A CHROMA (HTTP REAL)
+     * 1️⃣ QUERY A CHROMA
      */
-    const chromaRes = await axios.post(
-      `${CHROMA_URL}/api/v1/collections/jurisprudencia/query`,
-      {
-        query_texts: [question],
-        n_results: 3,
-      }
-    );
+    const result = await collection.query({
+      queryTexts: [question],
+      nResults: 3,
+    });
 
-    const documents = chromaRes.data.documents?.[0] || [];
-    const metadatas = chromaRes.data.metadatas?.[0] || [];
+    const documents = result.documents?.[0] || [];
+    const metadatas = result.metadatas?.[0] || [];
 
     if (documents.length === 0) {
       return res.json({
@@ -156,7 +159,7 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
     logQuery({ ip: req.ip, status: "ok" });
   } catch (err) {
-    console.error("ERROR:", err.message);
+    console.error("ERROR /ask:", err);
 
     res.status(500).json({
       error: "Error interno",
@@ -167,9 +170,22 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
 /**
  * ============================
- * START
+ * START SERVER
  * ============================
  */
-app.listen(PORT, () => {
-  console.log(`API RAG activa en puerto ${PORT}`);
+async function startServer() {
+  // Crear / obtener colección
+  collection = await chroma.getOrCreateCollection({
+    name: "jurisprudencia",
+  });
+
+  console.log("✅ Colección 'jurisprudencia' lista");
+
+  app.listen(PORT, () => {
+    console.log(`🚀 API RAG activa en puerto ${PORT}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error("❌ Error iniciando servidor:", err);
 });

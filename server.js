@@ -44,6 +44,7 @@ const groq = new Groq({
  * ============================
  */
 const app = express();
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
 
@@ -203,16 +204,16 @@ app.post("/ask", askRateLimiter, async (req, res) => {
   try {
     /**
      * ============================
-     * 1️⃣ OBTENER COLECCIÓN
+     * 1️ OBTENER COLECCIÓN
      * ============================
      */
     const collection = await chroma.getCollection({
-      name: "juridico",
+      name: "jurisprudencia",
     });
 
     /**
      * ============================
-     * 2️⃣ BÚSQUEDA SEMÁNTICA
+     * 2️ BÚSQUEDA SEMÁNTICA
      * ============================
      */
     const results = await collection.query({
@@ -222,14 +223,14 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
     /**
      * ============================
-     * 3️⃣ CONTEXTO JURÍDICO
+     * 3️ CONTEXTO JURÍDICO
      * ============================
      */
     const context = results.documents[0].join("\n\n");
 
     /**
      * ============================
-     * 4️⃣ PROMPT JURÍDICO
+     * 4️ PROMPT JURÍDICO
      * ============================
      */
     const completion = await groq.chat.completions.create({
@@ -263,7 +264,7 @@ RESPONDE DE MANERA FUNDADA Y CLARA.
 
     /**
      * ============================
-     * 5️⃣ RESPUESTA FINAL
+     * 5️ RESPUESTA FINAL
      * ============================
      */
     const answer = completion.choices[0].message.content;

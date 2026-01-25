@@ -5,7 +5,8 @@
  * Lee el archivo .env y expone las variables en process.env
  * Acá es donde se carga GROQ_API_KEY
  */
-require("dotenv").config();
+import dotenv from "dotenv";
+dotenv.config();
 
 /**
  * ============================
@@ -13,11 +14,11 @@ require("dotenv").config();
  * ============================
  * No se elimina ni altera nada
  */
-const express = require("express");
-const cors = require("cors");
-const { ChromaClient } = require("chromadb");
-const fs = require("fs");
-const rateLimit = require("express-rate-limit");
+import express from "express";
+import cors from "cors";
+import { ChromaClient } from "chromadb";
+import fs from "fs";
+import rateLimit from "express-rate-limit";
 
 /**
  * ============================
@@ -25,7 +26,7 @@ const rateLimit = require("express-rate-limit");
  * ============================
  * Cliente para invocar el LLM (Llama 3)
  */
-const Groq = require("groq-sdk");
+import Groq from "groq-sdk";
 
 /**
  * ============================
@@ -184,6 +185,7 @@ function logQuery({ ip, questionLength, status, error }) {
 app.post("/ask", askRateLimiter, async (req, res) => {
   const { question } = req.body;
   const validationError = validateQuestion(question);
+
   if (validationError) {
     logQuery({
       ip: req.ip,
@@ -191,6 +193,7 @@ app.post("/ask", askRateLimiter, async (req, res) => {
       status: "invalid",
       error: validationError,
     });
+
     return res.status(400).json({
       error: "Consulta inválida",
       detail: validationError,
@@ -200,7 +203,7 @@ app.post("/ask", askRateLimiter, async (req, res) => {
   try {
     /**
      * ============================
-     * 1️ OBTENER COLECCIÓN
+     * 1️⃣ OBTENER COLECCIÓN
      * ============================
      */
     const collection = await chroma.getCollection({
@@ -209,10 +212,8 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
     /**
      * ============================
-     * 2️ BÚSQUEDA SEMÁNTICA
+     * 2️⃣ BÚSQUEDA SEMÁNTICA
      * ============================
-     * queryTexts: la pregunta del usuario
-     * nResults: cantidad de documentos relevantes
      */
     const results = await collection.query({
       queryTexts: [question],
@@ -221,20 +222,15 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
     /**
      * ============================
-     * 3️ CONTEXTO JURÍDICO
+     * 3️⃣ CONTEXTO JURÍDICO
      * ============================
-     * Unimos los documentos recuperados
      */
     const context = results.documents[0].join("\n\n");
 
     /**
      * ============================
-     * 4️ PROMPT JURÍDICO
+     * 4️⃣ PROMPT JURÍDICO
      * ============================
-     * Acá se define:
-     * - Rol
-     * - Estilo (formal)
-     * - Límites (no inventar)
      */
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -262,12 +258,12 @@ RESPONDE DE MANERA FUNDADA Y CLARA.
 `,
         },
       ],
-      temperature: 0.2, // Bajo para respuestas jurídicas
+      temperature: 0.2,
     });
 
     /**
      * ============================
-     * 5️ RESPUESTA FINAL
+     * 5️⃣ RESPUESTA FINAL
      * ============================
      */
     const answer = completion.choices[0].message.content;
@@ -278,7 +274,6 @@ RESPONDE DE MANERA FUNDADA Y CLARA.
       sources: results.metadatas[0],
     });
 
-    // Logging de consulta exitosa
     logQuery({
       ip: req.ip,
       questionLength: question.length,

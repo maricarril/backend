@@ -58,7 +58,9 @@ const PORT = process.env.PORT || 3000;
  * NO usa embedding function porque ya cargamos embeddings manualmente
  */
 const chroma = new ChromaClient({
-  path: process.env.CHROMA_URL,
+  host: "chroma-4urg.onrender.com",
+  port: 443,
+  ssl: true,
 });
 
 /**

@@ -19,6 +19,12 @@ import Groq from "groq-sdk";
 import { ChromaClient } from "chromadb";
 
 /**
+ * 👉 Embeddings locales (sentence-transformers)
+ * Modelo: all-MiniLM-L6-v2
+ */
+import { pipeline } from "@xenova/transformers";
+
+/**
  * ============================
  * CONFIG APP
  * ============================
@@ -41,9 +47,9 @@ const groq = new Groq({
 
 /**
  * ============================
- * CHROMA CLIENT
+ * CHROMA CLIENT (SERVER REMOTO)
  * ============================
- * 👉 Configuración correcta para Chroma SERVER remoto
+ * 👉 Chroma SOLO almacena y busca vectores
  * 👉 NO usamos DefaultEmbeddingFunction
  */
 const chroma = new ChromaClient({
@@ -53,6 +59,30 @@ const chroma = new ChromaClient({
 });
 
 let collection;
+
+/**
+ * ============================
+ * EMBEDDINGS
+ * ============================
+ * Se carga una sola vez (lazy load)
+ */
+let embedder;
+
+async function getEmbedding(text) {
+  if (!embedder) {
+    embedder = await pipeline(
+      "feature-extraction",
+      "Xenova/all-MiniLM-L6-v2"
+    );
+  }
+
+  const output = await embedder(text, {
+    pooling: "mean",
+    normalize: true,
+  });
+
+  return Array.from(output.data);
+}
 
 /**
  * ============================
@@ -114,11 +144,16 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
   try {
     /**
-     * 1️⃣ QUERY A CHROMA
-     * 👉 Chroma SOLO busca (embeddings ya cargados)
+     * 1️⃣ Generar embedding de la pregunta
+     */
+    const embedding = await getEmbedding(question);
+
+    /**
+     * 2️⃣ Query a Chroma usando VECTORES
+     * 👉 NO queryTexts
      */
     const result = await collection.query({
-      queryTexts: [question],
+      queryEmbeddings: [embedding],
       nResults: 3,
     });
 
@@ -135,7 +170,7 @@ app.post("/ask", askRateLimiter, async (req, res) => {
     const context = documents.join("\n\n");
 
     /**
-     * 2️⃣ GROQ (LLM)
+     * 3️⃣ GROQ (LLM)
      */
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
@@ -179,9 +214,8 @@ app.post("/ask", askRateLimiter, async (req, res) => {
  */
 async function startServer() {
   /**
-   * 👉 IMPORTANTE:
-   * embeddingFunction: null
-   * evita DefaultEmbeddingFunction y errores en Render
+   * 👉 embeddingFunction: null
+   * Chroma NO genera embeddings
    */
   collection = await chroma.getOrCreateCollection({
     name: "jurisprudencia",

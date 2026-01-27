@@ -144,12 +144,12 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
   try {
     /**
-     * 1️⃣ Generar embedding de la pregunta
+     * 1️ Generar embedding de la pregunta
      */
     const embedding = await getEmbedding(question);
 
     /**
-     * 2️⃣ Query a Chroma usando VECTORES
+     * 2️ Query a Chroma usando VECTORES
      * 👉 NO queryTexts
      */
     const result = await collection.query({
@@ -170,17 +170,32 @@ app.post("/ask", askRateLimiter, async (req, res) => {
     const context = documents.join("\n\n");
 
     /**
-     * 3️⃣ GROQ (LLM)
+     * 3️ GROQ (LLM)
      */
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       temperature: 0.2,
       messages: [
-        {
-          role: "system",
-          content:
-            "Sos un asistente jurídico argentino. Respondés de manera técnica, clara y fundada en el Código Civil y Comercial.",
-        },
+		{
+		  role: "system",
+		  content: `
+			Sos un asistente jurídico argentino.
+
+			El CONTEXTO provisto contiene artículos REALES del Código Civil y Comercial de la Nación.
+			Tu tarea es responder ÚNICAMENTE en base a ese contexto.
+
+			REGLAS OBLIGATORIAS:
+			- NO inventes artículos ni numeraciones
+			- NO contradigas el contexto
+			- SI un artículo aparece en el contexto, asumí que EXISTE
+			- Respondé de forma técnica, clara y precisa
+			- Podés citar textualmente el artículo si corresponde
+
+			Si la respuesta no surge del contexto, respondé:
+			"No surge del material proporcionado".
+		  `,
+		},
+
         {
           role: "user",
           content: `CONTEXTO:\n${context}\n\nPREGUNTA:\n${question}`,

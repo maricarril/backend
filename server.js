@@ -3,38 +3,38 @@
  * VARIABLES DE ENTORNO
  * ============================
  */
-import dotenv from "dotenv";
-dotenv.config();
+import dotenv from "dotenv"; // Carga variables de entorno desde .env
+dotenv.config(); // Inicializa dotenv
 
 /**
  * ============================
  * IMPORTS
  * ============================
  */
-import express from "express";
-import cors from "cors";
-import fs from "fs";
-import rateLimit from "express-rate-limit";
-import Groq from "groq-sdk";
-import { ChromaClient } from "chromadb";
+import express from "express"; // Framework HTTP
+import cors from "cors"; // Manejo de CORS
+import fs from "fs"; // Acceso a filesystem
+import rateLimit from "express-rate-limit"; // Rate limiting
+import Groq from "groq-sdk"; // Cliente Groq LLM
+import { ChromaClient } from "chromadb"; // Cliente Chroma DB
 
 /**
  * 👉 Embeddings locales (sentence-transformers)
  * Modelo: all-MiniLM-L6-v2
  */
-import { pipeline } from "@xenova/transformers";
+import { pipeline } from "@xenova/transformers"; // Pipeline de embeddings
 
 /**
  * ============================
  * CONFIG APP
  * ============================
  */
-const app = express();
-app.set("trust proxy", 1);
-app.use(cors());
-app.use(express.json());
+const app = express(); // Instancia Express
+app.set("trust proxy", 1); // Confía en proxy (Render)
+app.use(cors()); // Habilita CORS
+app.use(express.json()); // JSON body parser
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000; // Puerto del servidor
 
 /**
  * ============================
@@ -42,7 +42,7 @@ const PORT = process.env.PORT || 3000;
  * ============================
  */
 const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY,
+  apiKey: process.env.GROQ_API_KEY, // API Key Groq
 });
 
 /**
@@ -53,12 +53,26 @@ const groq = new Groq({
  * 👉 NO usamos DefaultEmbeddingFunction
  */
 const chroma = new ChromaClient({
-  host: "chroma-4urg.onrender.com",
-  port: 443,
-  ssl: true,
+  host: "chroma-4urg.onrender.com", // Host remoto Chroma
+  port: 443, // Puerto HTTPS
+  ssl: true, // SSL habilitado
 });
 
-let collection;
+let collection = null; // Referencia lazy a la colección Chroma
+
+/**
+ * ============================
+ * CHROMA LAZY LOAD
+ * ============================
+ */
+async function getCollection() {
+  if (collection) return collection; // Reusa colección si ya existe
+  collection = await chroma.getOrCreateCollection({
+    name: "jurisprudencia", // Nombre de la colección
+    embeddingFunction: null, // Embeddings externos
+  });
+  return collection; // Devuelve colección lista
+}
 
 /**
  * ============================
@@ -66,22 +80,22 @@ let collection;
  * ============================
  * Se carga una sola vez (lazy load)
  */
-let embedder;
+let embedder; // Cache del modelo de embeddings
 
 async function getEmbedding(text) {
-  if (!embedder) {
+  if (!embedder) { // Inicializa solo una vez
     embedder = await pipeline(
-      "feature-extraction",
-      "Xenova/all-MiniLM-L6-v2"
+      "feature-extraction", // Tipo de pipeline
+      "Xenova/all-MiniLM-L6-v2" // Modelo embeddings
     );
   }
 
   const output = await embedder(text, {
-    pooling: "mean",
-    normalize: true,
+    pooling: "mean", // Promedio de tokens
+    normalize: true, // Normalización vectorial
   });
 
-  return Array.from(output.data);
+  return Array.from(output.data); // Vector plano
 }
 
 /**
@@ -90,7 +104,7 @@ async function getEmbedding(text) {
  * ============================
  */
 app.get("/health", (_, res) => {
-  res.json({ status: "ok", service: "legal-backend" });
+  res.json({ status: "ok", service: "legal-backend" }); // Health OK
 });
 
 /**
@@ -99,8 +113,8 @@ app.get("/health", (_, res) => {
  * ============================
  */
 const askRateLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 30,
+  windowMs: 15 * 60 * 1000, // Ventana 15 min
+  max: 30, // Máx requests
 });
 
 /**
@@ -109,10 +123,10 @@ const askRateLimiter = rateLimit({
  * ============================
  */
 function validateQuestion(question) {
-  if (!question || typeof question !== "string") return "Pregunta inválida";
-  if (question.trim().length === 0) return "Pregunta vacía";
-  if (question.length > 500) return "Pregunta demasiado larga";
-  return null;
+  if (!question || typeof question !== "string") return "Pregunta inválida"; // Tipo inválido
+  if (question.trim().length === 0) return "Pregunta vacía"; // Vacía
+  if (question.length > 500) return "Pregunta demasiado larga"; // Muy larga
+  return null; // OK
 }
 
 /**
@@ -121,11 +135,11 @@ function validateQuestion(question) {
  * ============================
  */
 function logQuery(data) {
-  fs.mkdirSync("./logs", { recursive: true });
+  fs.mkdirSync("./logs", { recursive: true }); // Crea carpeta logs
   fs.appendFile(
-    "./logs/queries.log",
-    JSON.stringify({ ...data, ts: new Date().toISOString() }) + "\n",
-    () => {}
+    "./logs/queries.log", // Archivo log
+    JSON.stringify({ ...data, ts: new Date().toISOString() }) + "\n", // Registro
+    () => {} // Callback vacío
   );
 }
 
@@ -135,89 +149,83 @@ function logQuery(data) {
  * ============================
  */
 app.post("/ask", askRateLimiter, async (req, res) => {
-  const { question } = req.body;
+  const { question } = req.body; // Extrae pregunta
 
-  const error = validateQuestion(question);
+  const error = validateQuestion(question); // Valida input
   if (error) {
-    return res.status(400).json({ error });
+    return res.status(400).json({ error }); // Error cliente
   }
 
   try {
     /**
-     * 1️ Generar embedding de la pregunta
+     * 1️⃣ Generar embedding de la pregunta
      */
-    const embedding = await getEmbedding(question);
+    const embedding = await getEmbedding(question); // Vector pregunta
 
     /**
-     * 2️ Query a Chroma usando VECTORES
-     * 👉 NO queryTexts
+     * 2️⃣ Obtener colección Chroma (lazy)
      */
-    const result = await collection.query({
-      queryEmbeddings: [embedding],
-      nResults: 3,
+    const col = await getCollection(); // Conexión bajo demanda
+
+    /**
+     * 3️⃣ Query a Chroma usando vectores
+     */
+    const result = await col.query({
+      queryEmbeddings: [embedding], // Vector de búsqueda
+      nResults: 3, // Top K
     });
 
-    const documents = result.documents?.[0] || [];
-    const metadatas = result.metadatas?.[0] || [];
+    const documents = result.documents?.[0] || []; // Docs encontrados
+    const metadatas = result.metadatas?.[0] || []; // Metadatos
 
     if (documents.length === 0) {
       return res.json({
-        answer: "No se encontró información relevante en la base documental.",
+        answer: "No se encontró información relevante en la base documental.", // Sin resultados
         sources: [],
       });
     }
 
-    const context = documents.join("\n\n");
+    const context = documents.join("\n\n"); // Contexto LLM
 
     /**
-     * 3️ GROQ (LLM)
+     * 4️⃣ GROQ (LLM)
      */
     const completion = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      temperature: 0.2,
+      model: "llama-3.1-8b-instant", // Modelo Groq
+      temperature: 0.2, // Baja creatividad
       messages: [
-		{
-		  role: "system",
-		  content: `
-			Sos un asistente jurídico argentino.
-
-			El CONTEXTO provisto contiene artículos REALES del Código Civil y Comercial de la Nación.
-			Tu tarea es responder ÚNICAMENTE en base a ese contexto.
-
-			REGLAS OBLIGATORIAS:
-			- NO inventes artículos ni numeraciones
-			- NO contradigas el contexto
-			- SI un artículo aparece en el contexto, asumí que EXISTE
-			- Respondé de forma técnica, clara y precisa
-			- Podés citar textualmente el artículo si corresponde
-
-			Si la respuesta no surge del contexto, respondé:
-			"No surge del material proporcionado".
-		  `,
-		},
-
         {
-          role: "user",
+          role: "system", // Prompt sistema
+          content: `
+Sos un asistente jurídico argentino.
+El CONTEXTO contiene artículos reales del CCyC.
+Respondé solo con ese material.
+Si no surge del contexto, decí:
+"No surge del material proporcionado".
+          `,
+        },
+        {
+          role: "user", // Prompt usuario
           content: `CONTEXTO:\n${context}\n\nPREGUNTA:\n${question}`,
         },
       ],
     });
 
-    const answer = completion.choices[0].message.content;
+    const answer = completion.choices[0].message.content; // Respuesta LLM
 
     res.json({
-      question,
-      answer,
-      sources: metadatas,
+      question, // Pregunta original
+      answer, // Respuesta
+      sources: metadatas, // Fuentes
     });
 
-    logQuery({ ip: req.ip, status: "ok" });
+    logQuery({ ip: req.ip, status: "ok" }); // Log OK
   } catch (err) {
-    console.error("ERROR /ask:", err);
+    console.error("ERROR /ask:", err); // Log error
 
-    res.status(500).json({
-      error: "Error interno",
-      detail: err.message,
+    res.status(503).json({
+      error: "Servicio temporalmente no disponible", // Error controlado
+      detail: err.message, // Detalle técnico
     });
   }
 });
@@ -227,23 +235,6 @@ app.post("/ask", askRateLimiter, async (req, res) => {
  * START SERVER
  * ============================
  */
-async function startServer() {
-  /**
-   * 👉 embeddingFunction: null
-   * Chroma NO genera embeddings
-   */
-  collection = await chroma.getOrCreateCollection({
-    name: "jurisprudencia",
-    embeddingFunction: null,
-  });
-
-  console.log("✅ Colección 'jurisprudencia' lista");
-
-  app.listen(PORT, () => {
-    console.log(`🚀 API RAG activa en puerto ${PORT}`);
-  });
-}
-
-startServer().catch((err) => {
-  console.error("❌ Error iniciando servidor:", err);
+app.listen(PORT, () => {
+  console.log(`🚀 API RAG activa en puerto ${PORT}`); // Backend inicia siempre
 });

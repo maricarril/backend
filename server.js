@@ -16,7 +16,7 @@ import cors from "cors"; // Manejo de CORS
 import fs from "fs"; // Acceso a filesystem
 import rateLimit from "express-rate-limit"; // Rate limiting
 import Groq from "groq-sdk"; // Cliente Groq LLM
-import { ChromaClient } from "chromadb"; // Cliente Chroma DB
+import { ChromaClient } from "chromadb"; // Cliente Chroma DB (⚠️ reemplazable por Qdrant/Pinecone)
 
 /**
  * 👉 Embeddings locales (sentence-transformers)
@@ -47,38 +47,52 @@ const groq = new Groq({
 
 /**
  * ============================
- * CHROMA CLIENT (SERVER REMOTO)
+ * VECTOR DATABASE CLIENT
  * ============================
- * 👉 Chroma SOLO almacena y busca vectores
- * 👉 NO usamos DefaultEmbeddingFunction
+ * 👉 HOY: Chroma remoto
+ * 👉 MAÑANA: Qdrant / Pinecone / Chroma embebido
+ * 👉 ESTE ES EL ÚNICO BLOQUE QUE CAMBIA AL MIGRAR
  */
 const chroma = new ChromaClient({
-  host: "chroma-4urg.onrender.com", // Host remoto Chroma
+  host: "chroma-4urg.onrender.com", // Host remoto Chroma (🔁 reemplazar)
   port: 443, // Puerto HTTPS
   ssl: true, // SSL habilitado
 });
 
-let collection = null; // Referencia lazy a la colección Chroma
+/**
+ * 👉 Referencia genérica a la colección vectorial
+ * 👉 NO depende de Chroma en el resto del código
+ */
+let collection = null; // Vector store lazy
 
 /**
  * ============================
- * CHROMA LAZY LOAD
+ * VECTOR STORE LAZY LOAD
  * ============================
+ * 👉 Abstracción de acceso a la base vectorial
+ * 👉 Al migrar a Qdrant, SOLO cambia el contenido de esta función
  */
 async function getCollection() {
-  if (collection) return collection; // Reusa colección si ya existe
+  if (collection) return collection; // Reusa conexión si ya existe
+
+  /**
+   * ⚠️ IMPLEMENTACIÓN ACTUAL: Chroma
+   * 🔁 FUTURO: aquí se conecta Qdrant / Pinecone / SQLite vectorial
+   */
   collection = await chroma.getOrCreateCollection({
-    name: "jurisprudencia", // Nombre de la colección
-    embeddingFunction: null, // Embeddings externos
+    name: "jurisprudencia", // Nombre lógico de la colección
+    embeddingFunction: null, // Embeddings generados externamente
   });
-  return collection; // Devuelve colección lista
+
+  return collection; // Devuelve vector store listo
 }
 
 /**
  * ============================
  * EMBEDDINGS
  * ============================
- * Se carga una sola vez (lazy load)
+ * 👉 Independiente de la base vectorial
+ * 👉 NO se toca al migrar Chroma → Qdrant
  */
 let embedder; // Cache del modelo de embeddings
 
@@ -158,37 +172,44 @@ app.post("/ask", askRateLimiter, async (req, res) => {
 
   try {
     /**
-     * 1️⃣ Generar embedding de la pregunta
+     * 1️⃣ Generar embedding
+     * 👉 Independiente del motor vectorial
      */
     const embedding = await getEmbedding(question); // Vector pregunta
 
-    /**
-     * 2️⃣ Obtener colección Chroma (lazy)
-     */
-    const col = await getCollection(); // Conexión bajo demanda
+    let documents = []; // Documentos de contexto
+    let metadatas = []; // Metadatos
+    let hasContext = true; // Flag RAG activo
 
-    /**
-     * 3️⃣ Query a Chroma usando vectores
-     */
-    const result = await col.query({
-      queryEmbeddings: [embedding], // Vector de búsqueda
-      nResults: 3, // Top K
-    });
+    try {
+      /**
+       * 2️⃣ Intentar RAG con base vectorial
+       * 👉 Si falla, se pasa a modo LLM puro
+       */
+      const col = await getCollection(); // Acceso vector DB (lazy)
 
-    const documents = result.documents?.[0] || []; // Docs encontrados
-    const metadatas = result.metadatas?.[0] || []; // Metadatos
-
-    if (documents.length === 0) {
-      return res.json({
-        answer: "No se encontró información relevante en la base documental.", // Sin resultados
-        sources: [],
+      const result = await col.query({
+        queryEmbeddings: [embedding], // Vector búsqueda
+        nResults: 3, // Top K
       });
+
+      documents = result.documents?.[0] || [];
+      metadatas = result.metadatas?.[0] || [];
+    } catch (vectorErr) {
+      /**
+       * ⚠️ FALLBACK
+       * 👉 Base vectorial caída
+       * 👉 Se responde con Groq SIN contexto
+       */
+      hasContext = false; // Modo degradado
+      console.warn("⚠️ Vector DB no disponible, usando LLM puro");
     }
 
-    const context = documents.join("\n\n"); // Contexto LLM
+    const context = documents.join("\n\n"); // Contexto textual
 
     /**
-     * 4️⃣ GROQ (LLM)
+     * 3️⃣ GROQ (LLM)
+     * 👉 Funciona con o sin contexto
      */
     const completion = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant", // Modelo Groq
@@ -196,17 +217,24 @@ app.post("/ask", askRateLimiter, async (req, res) => {
       messages: [
         {
           role: "system", // Prompt sistema
-          content: `
+          content: hasContext
+            ? `
 Sos un asistente jurídico argentino.
-El CONTEXTO contiene artículos reales del CCyC.
-Respondé solo con ese material.
+Respondé SOLO en base al CONTEXTO.
 Si no surge del contexto, decí:
 "No surge del material proporcionado".
-          `,
+            `
+            : `
+Sos un asistente general.
+La base documental no está disponible.
+Respondé de forma orientativa y sin citar artículos.
+            `,
         },
         {
           role: "user", // Prompt usuario
-          content: `CONTEXTO:\n${context}\n\nPREGUNTA:\n${question}`,
+          content: hasContext
+            ? `CONTEXTO:\n${context}\n\nPREGUNTA:\n${question}`
+            : `PREGUNTA:\n${question}`,
         },
       ],
     });
@@ -216,15 +244,16 @@ Si no surge del contexto, decí:
     res.json({
       question, // Pregunta original
       answer, // Respuesta
-      sources: metadatas, // Fuentes
+      sources: hasContext ? metadatas : [], // Fuentes solo si hubo RAG
+      mode: hasContext ? "rag" : "llm-only", // Modo respuesta (debug/UX)
     });
 
-    logQuery({ ip: req.ip, status: "ok" }); // Log OK
+    logQuery({ ip: req.ip, status: "ok", mode: hasContext ? "rag" : "fallback" });
   } catch (err) {
-    console.error("ERROR /ask:", err); // Log error
+    console.error("ERROR /ask:", err); // Error inesperado
 
-    res.status(503).json({
-      error: "Servicio temporalmente no disponible", // Error controlado
+    res.status(500).json({
+      error: "Error interno", // Error genérico
       detail: err.message, // Detalle técnico
     });
   }
@@ -236,5 +265,5 @@ Si no surge del contexto, decí:
  * ============================
  */
 app.listen(PORT, () => {
-  console.log(`🚀 API RAG activa en puerto ${PORT}`); // Backend inicia siempre
+  console.log(`🚀 API RAG activa en puerto ${PORT}`); // Backend siempre levanta
 });
